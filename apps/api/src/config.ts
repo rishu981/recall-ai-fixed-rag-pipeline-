@@ -45,8 +45,8 @@ export const config = {
     ? process.env.CORS_ORIGIN.split(",").map((s) => s.trim()).filter(Boolean)
     : null,
   uploadDir: resolve(here, "..", process.env.UPLOAD_DIR ?? "./uploads"),
-  maxUploadBytes: Number(process.env.MAX_UPLOAD_BYTES ?? 20 * 1024 * 1024),
-  allowOversize: bool("ALLOW_OVERSIZE", false),
+  maxUploadBytes: Number(process.env.MAX_UPLOAD_BYTES ?? 2 * 1024 * 1024 * 1024),
+  allowOversize: bool("ALLOW_OVERSIZE", true),
   logRequests: bool("LOG_REQUESTS", true),
   /**
    * Pause between streamed chunks. Raise it when demoing so the typing

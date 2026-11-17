@@ -55,9 +55,9 @@ export async function createApp() {
     }),
   );
 
-  // Uploads use multipart and set their own limits; JSON gets a generous but
-  // finite cap so a runaway body cannot exhaust memory.
-  app.use(express.json({ limit: "2mb" }));
+  // Generous cap for requests, attachments, and metadata
+  app.use(express.json({ limit: "100mb" }));
+  app.use(express.urlencoded({ extended: true, limit: "100mb" }));
 
   if (config.logRequests) {
     app.use((req, res, next) => {

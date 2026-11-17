@@ -492,18 +492,7 @@ class MockApi implements RecallApi {
     const spec = ALLOWED_UPLOAD_TYPES.find((t) =>
       t.extensions.some((e) => lower.endsWith(e)),
     );
-    if (!spec) {
-      throw new ApiError(
-        `${file.name}: ${file.type || "This file type"} is not supported yet. Allowed: PDF, TXT, MD, DOCX, PNG, JPG, WEBP.`,
-        "unsupported_file",
-      );
-    }
-    if (file.size > spec.maxBytes) {
-      throw new ApiError(
-        `${file.name} is ${(file.size / 1048576).toFixed(1)} MB. The limit for ${spec.label} is ${(spec.maxBytes / 1048576).toFixed(0)} MB.`,
-        "too_large",
-      );
-    }
+    const kind = spec?.kind ?? (file.type.startsWith("image/") ? "image" : "document");
 
     const id = uid("att");
     const record: Attachment = {
@@ -511,7 +500,7 @@ class MockApi implements RecallApi {
       name: file.name,
       mimeType: file.type || "application/octet-stream",
       size: file.size,
-      kind: spec.kind,
+      kind,
       status: "uploading",
       progress: 0,
       local: false,

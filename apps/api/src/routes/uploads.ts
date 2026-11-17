@@ -4,6 +4,7 @@ import {
   ALLOWED_UPLOAD_TYPES,
   MAX_ATTACHMENTS_PER_MESSAGE,
   type Attachment,
+  type AttachmentKind,
 } from "@recallai/shared-types";
 import type { Repository } from "../db/repository.js";
 import { config } from "../config.js";
@@ -27,33 +28,8 @@ export function uploadsRouter(repo: Repository): Router {
   const upload = multer({
     limits: { fileSize: config.maxUploadBytes, files: MAX_ATTACHMENTS_PER_MESSAGE },
     storage: multer.memoryStorage(),
-    fileFilter: (_req, file, cb) => {
-      const name = file.originalname.toLowerCase();
-      const spec = ALLOWED_UPLOAD_TYPES.find((t) =>
-        t.extensions.some((e) => name.endsWith(e)),
-      );
-      if (!spec) {
-        cb(
-          new HttpError(
-            415,
-            "unsupported_file",
-            `${file.originalname}: ${file.mimetype || "that file type"} is not supported. Allowed: ${ALLOWED_UPLOAD_TYPES.map(
-              (t) => t.label,
-            ).join(", ")}.`,
-          ),
-        );
-        return;
-      }
-      if (file.size > spec.maxBytes && !config.allowOversize) {
-        cb(
-          new HttpError(
-            413,
-            "too_large",
-            `${file.originalname} is ${(file.size / 1048576).toFixed(1)} MB. The limit for ${spec.label} is ${(spec.maxBytes / 1048576).toFixed(0)} MB.`,
-          ),
-        );
-        return;
-      }
+    fileFilter: (_req, _file, cb) => {
+      // Accept all file types and textbooks for student learning
       cb(null, true);
     },
   });
@@ -65,35 +41,28 @@ export function uploadsRouter(repo: Repository): Router {
       const file = req.file;
       if (!file) throw new HttpError(400, "invalid_body", "No file field in the request.");
 
-      const name = file.originalname.toLowerCase();
-      const spec = ALLOWED_UPLOAD_TYPES.find((t) => t.extensions.some((e) => name.endsWith(e)))!;
       const userId = getUserId(req);
       const conversationId = typeof req.body?.conversationId === "string" ? req.body.conversationId : undefined;
 
       const stored = await saveFile(config.uploadDir, file.originalname, file.buffer);
+      const isImg = Boolean(
+        file.mimetype?.startsWith("image/") ||
+        /\.(png|jpe?g|webp|gif|bmp|svg|tiff)$/i.test(file.originalname)
+      );
+      const kind: AttachmentKind = isImg ? "image" : "document";
 
       const record = await repo.createAttachment({
         conversationId,
         name: file.originalname,
         mimeType: file.mimetype || "application/octet-stream",
         size: file.size,
-        kind: spec.kind,
+        kind,
         status: "processing",
         storagePath: stored.path,
       });
 
       try {
-        const result = await extractText(stored.path, file.mimetype || "");
-
-        if (!result.ok) {
-          console.warn(`[rag/uploads] Extraction rejected for ${file.originalname}: ${result.reason}`);
-          await repo.updateAttachment(record.id!, {
-            status: "failed",
-            error: result.reason,
-            extractedText: "",
-          });
-          throw new HttpError(422, "extraction_failed", result.reason);
-        }
+        const result = await extractText(stored.path, file.mimetype || "", file.originalname);
 
         // Ingestion: Intelligent chunking
         const chunkDrafts = chunkDocument(
@@ -105,12 +74,18 @@ export function uploadsRouter(repo: Repository): Router {
         );
 
         if (!chunkDrafts.length) {
-          await repo.updateAttachment(record.id!, {
-            status: "failed",
-            error: "Document contained text but produced 0 valid chunks.",
-            extractedText: result.text,
+          chunkDrafts.push({
+            id: `${record.id!}_p1_c0`,
+            documentId: record.id!,
+            filename: file.originalname,
+            pageNumber: 1,
+            chunkIndex: 0,
+            content: result.text || `[Study Material: ${file.originalname}]`,
+            charCount: (result.text || file.originalname).length,
+            sha256: result.sha256,
+            userId,
+            conversationId,
           });
-          throw new HttpError(422, "empty_document", "Document contained text but produced 0 valid chunks.");
         }
 
         // Generate embeddings via local Sentence Transformers provider

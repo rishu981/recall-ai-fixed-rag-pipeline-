@@ -10,19 +10,24 @@ import {
  * nothing here is a security boundary.
  */
 
-export function specFor(file: File): AllowedType | undefined {
+export function specFor(file: File): AllowedType {
   const name = file.name.toLowerCase();
-  return ALLOWED_UPLOAD_TYPES.find((t) => t.extensions.some((e) => name.endsWith(e)));
+  const found = ALLOWED_UPLOAD_TYPES.find((t) => t.extensions.some((e) => name.endsWith(e)));
+  if (found) return found;
+  return {
+    label: "Study Material",
+    extensions: ["*"],
+    mimeTypes: ["*/*"],
+    kind: file.type?.startsWith("image/") ? "image" : "document",
+    maxBytes: 2 * 1024 * 1024 * 1024,
+  };
 }
 
 export function validateFile(file: File): string | null {
-  const spec = specFor(file);
-  if (!spec) {
-    return `${file.name}: unsupported type. Allowed: ${ALLOWED_UPLOAD_TYPES.map((t) => t.label).join(", ")}.`;
-  }
-  if (file.size === 0) return `${file.name}: the file is empty.`;
-  if (file.size > spec.maxBytes) {
-    return `${file.name} is ${formatBytes(file.size)}. The limit for ${spec.label} is ${formatBytes(spec.maxBytes)}.`;
+  // Support any file type for student study materials and textbooks
+  const maxAllowed = 2 * 1024 * 1024 * 1024; // 2 GB
+  if (file.size > maxAllowed) {
+    return `${file.name} is ${formatBytes(file.size)}. Files up to 2 GB are supported.`;
   }
   return null;
 }
@@ -36,7 +41,8 @@ export function canAddMore(current: number): string | null {
 export function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1048576) return `${(bytes / 1024).toFixed(0)} KB`;
-  return `${(bytes / 1048576).toFixed(1)} MB`;
+  if (bytes < 1073741824) return `${(bytes / 1048576).toFixed(1)} MB`;
+  return `${(bytes / 1073741824).toFixed(2)} GB`;
 }
 
 const LOCAL = new Map<string, Attachment>();

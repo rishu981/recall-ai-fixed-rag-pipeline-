@@ -551,8 +551,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
           errors.push(problem);
           continue;
         }
-        if (current.length + accepted.length >= 6) {
-          errors.push("You can attach up to 6 files per message.");
+        if (current.length + accepted.length >= 50) {
+          errors.push("You can attach up to 50 files per message.");
           break;
         }
         const record = trackLocal(file);
@@ -591,7 +591,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const id = attachment.id;
     dispatch({ type: "dropAttachment", key: attachmentKey(attachment) });
     filesRef.current.delete(`${attachment.name}:${attachment.size}`);
-    if (id) void api.removeAttachment(id).catch(() => {});
+    if (id) void api.removeAttachment(id).catch(() => { });
   }, []);
 
   /* ---------------- sending ---------------- */
@@ -647,13 +647,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
           {
             onStart: (messageId, createdAt) => {
               assistantId = messageId;
-              dispatch({ type: "addMessage", id: conversationId, message: {
-                id: messageId,
-                role: "assistant",
-                content: "",
-                createdAt,
-                status: "streaming",
-              }});
+              dispatch({
+                type: "addMessage", id: conversationId, message: {
+                  id: messageId,
+                  role: "assistant",
+                  content: "",
+                  createdAt,
+                  status: "streaming",
+                }
+              });
               dispatch({ type: "patchMessage", id: conversationId, messageId: optimistic.id, value: { status: "complete" } });
               dispatch({ type: "patch", value: { generation: "streaming", activeMessageId: messageId } });
             },

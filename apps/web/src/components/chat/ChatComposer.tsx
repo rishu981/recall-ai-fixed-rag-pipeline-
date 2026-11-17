@@ -150,10 +150,10 @@ export function ChatComposer() {
               className="chip"
               onClick={pick}
               disabled={busy}
-              title="Attach PDF, TXT or DOCX notes"
+              title="Attach study materials (any file or textbook)"
             >
               <Paperclip size={13} />
-              <span>Attach notes (PDF, TXT, DOCX)</span>
+              <span>Attach study materials (any file)</span>
             </button>
           </div>
 
@@ -209,7 +209,7 @@ export function ChatComposer() {
               type="file"
               style={{ display: "none" }}
               multiple
-              accept=".pdf,.txt,.md,.docx,application/pdf,text/plain,text/markdown,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+              accept="*/*"
               onChange={(e) => pickDoc(e.target.files)}
             />
 

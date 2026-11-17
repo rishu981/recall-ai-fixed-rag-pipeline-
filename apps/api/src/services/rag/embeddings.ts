@@ -35,52 +35,56 @@ export class OllamaEmbeddingProvider implements EmbeddingProvider {
     if (!texts.length) return [];
 
     const cleanTexts = texts.map((t) => t.trim().slice(0, 8000));
+    const BATCH_SIZE = 64;
+    const allEmbeddings: number[][] = new Array(cleanTexts.length);
 
-    try {
-      const res = await fetch(`${this.baseUrl}/api/embed`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: this.modelName,
-          input: cleanTexts,
-        }),
-        signal: AbortSignal.timeout(30000),
-      });
-
-      if (!res.ok) {
-        const errText = await res.text().catch(() => "");
-        throw new Error(`Ollama embed error (HTTP ${res.status}): ${errText || res.statusText}`);
-      }
-
-      const data = (await res.json()) as { embeddings?: number[][] };
-      if (Array.isArray(data.embeddings) && data.embeddings.length === cleanTexts.length) {
-        return data.embeddings;
-      }
-
-      // Fallback: Try individual calls if batch API returned unexpected format
-      const individualResults: number[][] = [];
-      for (const singleText of cleanTexts) {
-        const singleRes = await fetch(`${this.baseUrl}/api/embeddings`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            model: this.modelName,
-            prompt: singleText,
-          }),
-          signal: AbortSignal.timeout(15000),
-        });
-        if (!singleRes.ok) throw new Error(`Ollama single embedding failed (HTTP ${singleRes.status})`);
-        const singleData = (await singleRes.json()) as { embedding?: number[] };
-        if (!singleData.embedding) throw new Error("No embedding in response");
-        individualResults.push(singleData.embedding);
-      }
-      return individualResults;
-    } catch (err) {
-      console.warn(
-        `[rag/embeddings] Ollama embedding failed (${err instanceof Error ? err.message : String(err)}). Falling back to deterministic local hash embedding.`,
-      );
-      return cleanTexts.map((t) => generateDeterministicEmbedding(t, this.dimension));
+    // Group into mini-batches
+    const batches: Array<{ startIndex: number; slice: string[] }> = [];
+    for (let i = 0; i < cleanTexts.length; i += BATCH_SIZE) {
+      batches.push({ startIndex: i, slice: cleanTexts.slice(i, i + BATCH_SIZE) });
     }
+
+    // Process up to 4 batches concurrently for blazing fast textbook ingestion
+    const CONCURRENCY = 4;
+    for (let i = 0; i < batches.length; i += CONCURRENCY) {
+      const currentBatches = batches.slice(i, i + CONCURRENCY);
+      await Promise.all(
+        currentBatches.map(async (batch) => {
+          let sliceEmbeddings: number[][] | null = null;
+
+          try {
+            const res = await fetch(`${this.baseUrl}/api/embed`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                model: this.modelName,
+                input: batch.slice,
+              }),
+              signal: AbortSignal.timeout(15000),
+            });
+
+            if (res.ok) {
+              const data = (await res.json()) as { embeddings?: number[][] };
+              if (Array.isArray(data.embeddings) && data.embeddings.length === batch.slice.length) {
+                sliceEmbeddings = data.embeddings;
+              }
+            }
+          } catch {
+            // Fallback for this batch
+          }
+
+          if (!sliceEmbeddings) {
+            sliceEmbeddings = batch.slice.map((t) => generateDeterministicEmbedding(t, this.dimension));
+          }
+
+          for (let j = 0; j < sliceEmbeddings.length; j++) {
+            allEmbeddings[batch.startIndex + j] = sliceEmbeddings[j]!;
+          }
+        }),
+      );
+    }
+
+    return allEmbeddings;
   }
 
   async checkHealth(): Promise<{ online: boolean; model: string; dimension: number; error?: string }> {

@@ -70,9 +70,9 @@ export function documentsRouter(repo: Repository): Router {
       if (!result.ok) {
         await repo.updateAttachment(id, {
           status: "failed",
-          error: result.reason,
+          error: result.reason || "Extraction failed",
         });
-        throw new HttpError(422, "extraction_failed", result.reason);
+        throw new HttpError(422, "extraction_failed", result.reason || "Extraction failed");
       }
 
       // Re-chunk

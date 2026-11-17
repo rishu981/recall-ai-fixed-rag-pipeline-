@@ -190,35 +190,78 @@ export interface AllowedType {
  */
 export const ALLOWED_UPLOAD_TYPES: AllowedType[] = [
   {
-    label: "PDF",
+    label: "PDF Textbook & Documents",
     extensions: [".pdf"],
     mimeTypes: ["application/pdf"],
     kind: "document",
-    maxBytes: 20 * 1024 * 1024,
+    maxBytes: 2 * 1024 * 1024 * 1024,
   },
   {
-    label: "Text",
-    extensions: [".txt", ".md"],
-    mimeTypes: ["text/plain", "text/markdown"],
-    kind: "document",
-    maxBytes: 5 * 1024 * 1024,
-  },
-  {
-    label: "Word",
-    extensions: [".docx"],
+    label: "Word Documents",
+    extensions: [".docx", ".doc", ".rtf"],
     mimeTypes: [
       "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "application/msword",
+      "application/rtf",
     ],
     kind: "document",
-    maxBytes: 20 * 1024 * 1024,
+    maxBytes: 2 * 1024 * 1024 * 1024,
   },
   {
-    label: "Image",
-    extensions: [".png", ".jpg", ".jpeg", ".webp"],
-    mimeTypes: ["image/png", "image/jpeg", "image/webp"],
+    label: "Text, Notes & eBooks",
+    extensions: [
+      ".txt", ".md", ".markdown", ".rst", ".tex", ".latex", ".epub", ".mobi",
+      ".csv", ".tsv", ".json", ".yaml", ".yml", ".xml", ".html", ".htm", ".log",
+    ],
+    mimeTypes: ["text/plain", "text/markdown", "text/csv", "application/json"],
+    kind: "document",
+    maxBytes: 2 * 1024 * 1024 * 1024,
+  },
+  {
+    label: "Presentation Slides",
+    extensions: [".pptx", ".ppt"],
+    mimeTypes: [
+      "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      "application/vnd.ms-powerpoint",
+    ],
+    kind: "document",
+    maxBytes: 2 * 1024 * 1024 * 1024,
+  },
+  {
+    label: "Spreadsheets & Tables",
+    extensions: [".xlsx", ".xls"],
+    mimeTypes: [
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "application/vnd.ms-excel",
+    ],
+    kind: "document",
+    maxBytes: 2 * 1024 * 1024 * 1024,
+  },
+  {
+    label: "Source Code & Scripts",
+    extensions: [
+      ".py", ".java", ".c", ".cpp", ".h", ".hpp", ".cs", ".js", ".ts",
+      ".tsx", ".jsx", ".rb", ".go", ".rs", ".php", ".sql", ".sh", ".bat",
+      ".r", ".m", ".swift", ".kt", ".scala", ".pl", ".css", ".scss",
+    ],
+    mimeTypes: ["text/x-python", "text/javascript", "text/plain"],
+    kind: "document",
+    maxBytes: 2 * 1024 * 1024 * 1024,
+  },
+  {
+    label: "Diagrams & Images",
+    extensions: [".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".svg", ".tiff"],
+    mimeTypes: ["image/png", "image/jpeg", "image/webp", "image/gif", "image/svg+xml"],
     kind: "image",
-    maxBytes: 10 * 1024 * 1024,
+    maxBytes: 2 * 1024 * 1024 * 1024,
+  },
+  {
+    label: "Any Study Material",
+    extensions: ["*"],
+    mimeTypes: ["*/*"],
+    kind: "document",
+    maxBytes: 2 * 1024 * 1024 * 1024,
   },
 ];
 
-export const MAX_ATTACHMENTS_PER_MESSAGE = 6;
+export const MAX_ATTACHMENTS_PER_MESSAGE = 50;
