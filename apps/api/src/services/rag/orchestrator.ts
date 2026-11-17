@@ -4,13 +4,20 @@ import { defaultRetrievalEngine, HybridRetrievalEngine } from "./retrieval.js";
 import {
   buildGeneralKnowledgePrompt,
   buildGroundedPrompt,
+  buildHybridPrompt,
+  buildWebGroundedPrompt,
   INSUFFICIENT_EVIDENCE_MESSAGE,
   sanitizeModelOutput,
 } from "./grounded-generator.js";
 import { activeGraphMemory, type GraphMemoryProvider } from "../graph-memory.js";
+import { searchWeb } from "../web/search.js";
 import type { RetrievalResult } from "./types.js";
 
-export type QueryIntent = "document_grounded" | "general_knowledge" | "personal_memory";
+export type QueryIntent =
+  | "document_grounded"
+  | "general_knowledge"
+  | "personal_memory"
+  | "web_search";
 
 export interface OrchestratedTurn {
   intent: QueryIntent;
@@ -71,7 +78,8 @@ export class AgentOrchestrator {
 
   /**
    * Orchestrates the turn: classifies intent, executes RAG retrieval if needed,
-   * checks evidence sufficiency, and formats the grounded or general prompt.
+   * checks evidence sufficiency, queries the web when notes are incomplete,
+   * and formats the grounded, hybrid, or web research prompt.
    */
   async orchestrateTurn(
     req: AnswerRequest,
@@ -79,6 +87,7 @@ export class AgentOrchestrator {
       userId?: string;
       hasIndexedDocs?: boolean;
       attachmentIds?: string[];
+      webSearch?: boolean;
     } = {},
   ): Promise<OrchestratedTurn> {
     const rawIds = [
@@ -87,6 +96,13 @@ export class AgentOrchestrator {
     ].filter(Boolean);
     const attachmentIds = Array.from(new Set(rawIds));
     const intent = this.classifyIntent(req.content, attachmentIds, options.hasIndexedDocs);
+
+    const wantsWebExplicit =
+      /\b(search (the )?web|search online|look up online|find online|latest|current|recent|news|google|browse|wikipedia)\b/i.test(
+        req.content,
+      );
+    // Web search is strictly opt-in: only runs when the toggle is explicitly turned ON
+    const allowWebSearch = options.webSearch === true;
 
     // -------------------------------------------------------------------------
     // Intent: Document-Grounded RAG (Mode A)
@@ -99,6 +115,35 @@ export class AgentOrchestrator {
 
       // If retrieval found sufficient relevant evidence
       if (retrieval.hasSufficientEvidence && retrieval.chunks.length > 0) {
+        // If the student explicitly asked for web search alongside their notes, build a hybrid turn
+        if (wantsWebExplicit && allowWebSearch) {
+          const webResults = await searchWeb(req.content, { maxResults: 3, fetchContent: true });
+          if (webResults.length > 0) {
+            const webCitations: Citation[] = webResults.map((r, i) => ({
+              documentId: "web",
+              filename: r.title,
+              chunkIndex: i,
+              snippet: r.snippet,
+              url: r.url,
+              sourceType: "web" as const,
+            }));
+            const { systemPrompt, userMessage } = buildHybridPrompt(
+              req.content,
+              retrieval,
+              webResults,
+              req.responseMode,
+            );
+            return {
+              intent: "document_grounded",
+              answerMode: "hybrid",
+              systemPrompt,
+              userPrompt: userMessage,
+              citations: [...retrieval.citations, ...webCitations],
+              retrieval,
+            };
+          }
+        }
+
         const { systemPrompt, userMessage } = buildGroundedPrompt(
           retrieval,
           req.content,
@@ -115,12 +160,62 @@ export class AgentOrchestrator {
         };
       }
 
+      // If local materials were insufficient, search the live web to find the answer
+      if (allowWebSearch) {
+        console.log(`[rag/orchestrator] Insufficient local evidence. Triggering live web search for: "${req.content.slice(0, 60)}"`);
+        const webResults = await searchWeb(req.content, { maxResults: 4, fetchContent: true });
+
+        if (webResults.length > 0) {
+          const webCitations: Citation[] = webResults.map((r, i) => ({
+            documentId: "web",
+            filename: r.title,
+            chunkIndex: i,
+            snippet: r.snippet,
+            url: r.url,
+            sourceType: "web" as const,
+          }));
+
+          // If we had some partial chunks from local notes, synthesize hybrid
+          if (retrieval.chunks.length > 0) {
+            const { systemPrompt, userMessage } = buildHybridPrompt(
+              req.content,
+              retrieval,
+              webResults,
+              req.responseMode,
+            );
+            return {
+              intent: "document_grounded",
+              answerMode: "hybrid",
+              systemPrompt,
+              userPrompt: userMessage,
+              citations: [...retrieval.citations, ...webCitations],
+              retrieval,
+            };
+          }
+
+          // Otherwise purely web-grounded
+          const { systemPrompt, userMessage } = buildWebGroundedPrompt(
+            req.content,
+            webResults,
+            req.responseMode,
+          );
+          return {
+            intent: "web_search",
+            answerMode: "web_grounded",
+            systemPrompt,
+            userPrompt: userMessage,
+            citations: webCitations,
+            retrieval,
+          };
+        }
+      }
+
       const mentionsDocs =
         /\b(this (pdf|document|file|paper|chapter|text|note|slide)|according to (the|my) (notes?|document|pdf|text)|in (the|my) (notes?|document|pdf|upload)|from (the|my) (pdf|document|upload)|based on (my|the) (notes?|document|pdf|material))\b/i.test(
           req.content,
         );
 
-      // If attachments were present or document was explicitly cited, refuse with insufficient evidence
+      // If attachments were present or document was explicitly cited and web returned nothing
       if (attachmentIds.length > 0 || mentionsDocs) {
         return {
           intent: "document_grounded",
@@ -133,6 +228,36 @@ export class AgentOrchestrator {
         };
       }
       // Otherwise, fall through to Mode B (general academic knowledge)
+    }
+
+    // -------------------------------------------------------------------------
+    // Intent: Web Search explicitly requested in general queries (only when toggle is ON)
+    // -------------------------------------------------------------------------
+    if (allowWebSearch) {
+      console.log(`[rag/orchestrator] Web search toggle is ON for query: "${req.content.slice(0, 60)}"`);
+      const webResults = await searchWeb(req.content, { maxResults: 4, fetchContent: true });
+      if (webResults.length > 0) {
+        const webCitations: Citation[] = webResults.map((r, i) => ({
+          documentId: "web",
+          filename: r.title,
+          chunkIndex: i,
+          snippet: r.snippet,
+          url: r.url,
+          sourceType: "web" as const,
+        }));
+        const { systemPrompt, userMessage } = buildWebGroundedPrompt(
+          req.content,
+          webResults,
+          req.responseMode,
+        );
+        return {
+          intent: "web_search",
+          answerMode: "web_grounded",
+          systemPrompt,
+          userPrompt: userMessage,
+          citations: webCitations,
+        };
+      }
     }
 
     // -------------------------------------------------------------------------
@@ -149,6 +274,7 @@ export class AgentOrchestrator {
       req.content,
       req.responseMode,
       historyContext,
+      allowWebSearch,
     );
 
     return {

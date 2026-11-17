@@ -5,7 +5,9 @@ import {
   BookMarked,
   ChevronDown,
   Copy,
+  ExternalLink,
   FileText,
+  Globe,
   RotateCw,
   Sparkles,
   ThumbsDown,
@@ -25,6 +27,8 @@ const ANSWER_MODE_LABELS: Record<AnswerMode, string> = {
   document_grounded: "📄 Document-Grounded",
   general_knowledge: "💡 General Knowledge",
   insufficient_evidence: "⚠️ Insufficient Evidence",
+  web_grounded: "🌐 Web-Researched",
+  hybrid: "📚 Notes + Web",
 };
 
 function CitationDisclosure({ message }: { message: ChatMessage }) {
@@ -38,9 +42,9 @@ function CitationDisclosure({ message }: { message: ChatMessage }) {
         <span
           className="answer-mode-badge"
           data-mode={answerMode}
-          title={ANSWER_MODE_LABELS[answerMode]}
+          title={ANSWER_MODE_LABELS[answerMode] || answerMode}
         >
-          {ANSWER_MODE_LABELS[answerMode]}
+          {ANSWER_MODE_LABELS[answerMode] || answerMode}
         </span>
       )}
       {citations && citations.length > 0 && (
@@ -54,10 +58,35 @@ function CitationDisclosure({ message }: { message: ChatMessage }) {
             {citations.map((c: Citation, i: number) => (
               <div key={i} className="memory" style={{ gap: 2 }}>
                 <div className="memory-top">
-                  <span className="tag" data-type="concept">
-                    {c.filename}
-                    {c.pageNumber ? ` · p.${c.pageNumber}` : ""}
-                  </span>
+                  {c.url ? (
+                    <a
+                      href={c.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="tag"
+                      data-type="concept"
+                      style={{
+                        textDecoration: "none",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 4,
+                        maxWidth: "100%",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                      title={c.url}
+                    >
+                      <Globe size={11} />
+                      <span>{c.filename}</span>
+                      <ExternalLink size={10} style={{ opacity: 0.7 }} />
+                    </a>
+                  ) : (
+                    <span className="tag" data-type="concept">
+                      {c.filename}
+                      {c.pageNumber ? ` · p.${c.pageNumber}` : ""}
+                    </span>
+                  )}
                 </div>
                 {c.snippet && (
                   <p className="memory-text" style={{ fontStyle: "italic", fontSize: 12 }}>

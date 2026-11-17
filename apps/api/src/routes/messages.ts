@@ -22,6 +22,7 @@ const sendSchema = z.object({
   content: z.string().max(20_000).default(""),
   attachmentIds: z.array(z.string()).max(12).default([]),
   responseMode: z.enum(["study", "deep-dive", "quiz"]).default("study"),
+  webSearch: z.boolean().default(false),
 });
 
 export function messagesRouter(repo: Repository, provider: AnswerProvider): Router {
@@ -165,6 +166,7 @@ export function messagesRouter(repo: Repository, provider: AnswerProvider): Rout
         userId,
         hasIndexedDocs: totalIndexedChunks > 0,
         attachmentIds,
+        webSearch: body.webSearch,
       },
     );
 

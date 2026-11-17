@@ -42,9 +42,16 @@ export interface Citation {
   chunkIndex: number;
   snippet: string;
   relevanceScore?: number;
+  url?: string;
+  sourceType?: "document" | "web";
 }
 
-export type AnswerMode = "document_grounded" | "general_knowledge" | "insufficient_evidence";
+export type AnswerMode =
+  | "document_grounded"
+  | "general_knowledge"
+  | "insufficient_evidence"
+  | "web_grounded"
+  | "hybrid";
 
 /* ------------------------------------------------------------------ */
 /* Conversations & messages                                            */
@@ -93,6 +100,7 @@ export interface SendMessageRequest {
   content: string;
   attachmentIds: string[];
   responseMode: ResponseMode;
+  webSearch?: boolean;
 }
 
 export interface SendMessageResponse {

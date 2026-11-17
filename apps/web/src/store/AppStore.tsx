@@ -67,6 +67,7 @@ export interface AppState {
   attachments: Attachment[];
   attachmentError: string | null;
   responseMode: ResponseMode;
+  webSearchEnabled: boolean;
 
   /* Generation */
   generation: GenerationStatus;
@@ -100,6 +101,7 @@ const initialState: AppState = {
   attachments: [],
   attachmentError: null,
   responseMode: "study",
+  webSearchEnabled: false,
 
   generation: "idle",
   activeMessageId: null,
@@ -267,6 +269,8 @@ export interface AppApi {
 
   setDraft(text: string): void;
   setResponseMode(mode: ResponseMode): void;
+  toggleWebSearch(): void;
+  setWebSearchEnabled(enabled: boolean): void;
   addFiles(files: FileList | File[]): void;
   removeAttachment(attachment: Attachment): void;
   retryAttachment(attachment: Attachment): void;
@@ -319,6 +323,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const prefersLight = window.matchMedia("(prefers-color-scheme: light)").matches;
     setTheme(stored === "light" || stored === "dark" ? stored : prefersLight ? "light" : "dark");
   }, [setTheme]);
+
+  /* ---------------- web search persistence ---------------- */
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem("recallai.webSearch");
+      if (stored !== null) {
+        dispatch({ type: "patch", value: { webSearchEnabled: stored === "true" } });
+      }
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem("recallai.webSearch", String(state.webSearchEnabled));
+    } catch {}
+  }, [state.webSearchEnabled]);
 
   /* ---------------- online / offline ---------------- */
   useEffect(() => {
@@ -643,7 +663,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       try {
         await api.streamMessage(
           conversationId,
-          { content, attachmentIds, responseMode: stateRef.current.responseMode },
+          {
+            content,
+            attachmentIds,
+            responseMode: stateRef.current.responseMode,
+            webSearch: stateRef.current.webSearchEnabled,
+          },
           {
             onStart: (messageId, createdAt) => {
               assistantId = messageId;
@@ -849,6 +874,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     dispatch({ type: "patch", value: { responseMode } });
   }, []);
 
+  const toggleWebSearch = useCallback(() => {
+    dispatch({ type: "patch", value: { webSearchEnabled: !stateRef.current.webSearchEnabled } });
+  }, []);
+
+  const setWebSearchEnabled = useCallback((webSearchEnabled: boolean) => {
+    dispatch({ type: "patch", value: { webSearchEnabled } });
+  }, []);
+
   const setSearchQuery = useCallback((searchQuery: string) => {
     dispatch({ type: "patch", value: { searchQuery } });
   }, []);
@@ -895,6 +928,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setTheme,
       setDraft,
       setResponseMode,
+      toggleWebSearch,
+      setWebSearchEnabled,
       addFiles,
       removeAttachment,
       retryAttachment,
@@ -922,6 +957,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setTheme,
       setDraft,
       setResponseMode,
+      toggleWebSearch,
+      setWebSearchEnabled,
       addFiles,
       removeAttachment,
       retryAttachment,

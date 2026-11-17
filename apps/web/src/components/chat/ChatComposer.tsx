@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ArrowUp,
   ChevronDown,
+  Globe,
   Paperclip,
   Square,
 } from "lucide-react";
@@ -34,6 +35,7 @@ export function ChatComposer() {
     state,
     setDraft,
     setResponseMode,
+    toggleWebSearch,
     addFiles,
     removeAttachment,
     send,
@@ -154,6 +156,21 @@ export function ChatComposer() {
             >
               <Paperclip size={13} />
               <span>Attach study materials (any file)</span>
+            </button>
+            <button
+              type="button"
+              className="chip"
+              data-on={state.webSearchEnabled ? "true" : "false"}
+              onClick={toggleWebSearch}
+              disabled={busy}
+              title={
+                state.webSearchEnabled
+                  ? "Web Search is ON (free DuckDuckGo & Wikipedia) — Click to turn OFF"
+                  : "Web Search is OFF — Click to turn ON"
+              }
+            >
+              <Globe size={13} />
+              <span>{state.webSearchEnabled ? "Web Search: ON" : "Web Search: OFF"}</span>
             </button>
           </div>
 
